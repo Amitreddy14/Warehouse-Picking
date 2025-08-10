@@ -55,3 +55,96 @@ def loop_wave(y_low, y_high, df_orderlines, list_results, n1, n2, distance_thres
     df_results, df_reswave = create_dataframe(list_wid, list_dst, list_route, list_ord, 
         distance_route, list_lines, list_pcs, list_monomult, list_ordnum, list_dstw)
     return list_results, df_reswave
+
+
+def simulation_cluster(y_low, y_high, df_orderlines, list_results, n1, n2, distance_threshold):
+    '''Simulate for three scenarios'''
+    # Loop_wave: Simulation 1
+    mono_method, multi_method = 'normal', 'normal'
+    list_results, df_reswave1 = loop_wave(y_low, y_high, df_orderlines, list_results, n1, n2, 
+        distance_threshold, mono_method, multi_method)
+    # Loop_wave: Simulation 2
+    mono_method, multi_method = 'clustering', 'normal'
+    list_results, df_reswave2 = loop_wave(y_low, y_high, df_orderlines, list_results, n1, n2, 
+        distance_threshold, mono_method, multi_method)
+    # Loop_wave: Simulation 3
+    mono_method, multi_method = 'clustering', 'clustering'
+    list_results, df_reswave3 = loop_wave(y_low, y_high, df_orderlines, list_results, n1, n2, 
+        distance_threshold, mono_method, multi_method)
+
+    # Expand
+    [list_wid, list_dst, list_route, list_ord, list_lines, list_pcs, list_monomult] = [list_results[i] for i in range(len(list_results))]
+    lines_number = len(df_orderlines)
+
+    # Results 
+    df_results = pd.DataFrame({'wave_number': list_wid,
+                                'distance': list_dst,
+                                'chemins': list_route,
+                                'order_per_wave': list_ord,
+                                'lines': list_lines,
+                                'pcs': list_pcs,
+                                'mono_multi':list_monomult})
+                                
+    # Final Processing
+    df_reswave = process_methods(df_reswave1, df_reswave2, df_reswave3, lines_number, distance_threshold)
+
+    return df_reswave, df_results
+
+
+def create_dataframe(list_wid, list_dst, list_route, list_ord, distance_route, list_lines, list_pcs, list_monomult, list_ordnum, list_dstw):
+    ''' Create Dataframes of results'''
+
+    # Results by Wave df
+    df_results = pd.DataFrame({'wave_number': list_wid,
+                                'distance': list_dst,
+                                'chemin': list_route,
+                                'orders_per_wave': list_ord,
+                                'lines': list_lines,
+                                'pcs': list_pcs,
+                                'mono_multi':list_monomult})
+    # Results by Wave_ID
+    df_reswave = pd.DataFrame({
+        'orders_number': list_ordnum,
+        'distance': list_dstw 
+        })
+
+    return df_results, df_reswave
+
+# Append Results
+def append_results(list_wid, list_dst, list_route, list_ord, list_lines, 
+		list_pcs, list_monomult, wave_id, wave_distance, list_chemin, orders_number, n_lines, n_pcs, monomult):
+
+	list_wid.append(wave_id)
+	list_dst.append(wave_distance)
+	list_route.append(list_chemin)
+	list_ord.append(orders_number)
+	list_lines.append(n_lines)
+	list_pcs.append(n_pcs)
+	list_monomult.append(monomult)
+
+	return list_wid, list_dst, list_route, list_ord, list_lines, list_pcs, list_monomult
+
+
+def process_methods(df_reswave1, df_reswave2, df_reswave3, lines_number, distance_threshold):
+    ''' Process the results of three methods'''
+
+    # Concatenate two dataframes for plot
+    df_reswave1.rename(columns={"distance": "distance_method_1"}, inplace = True)
+    df_reswave2.rename(columns={"distance": "distance_method_2"}, inplace = True)
+    df_reswave3.rename(columns={"distance": "distance_method_3"}, inplace = True)
+
+    df_reswave = df_reswave1.set_index('orders_number')
+    # Rename columns
+    df_reswave['distance_method_2'] = df_reswave2.set_index('orders_number')['distance_method_2']
+    df_reswave['distance_method_3'] = df_reswave3.set_index('orders_number')['distance_method_3']
+
+    df_reswave.reset_index().plot.bar(x = 'orders_number', y = ['distance_method_1', 'distance_method_2', 'distance_method_3'], 
+        figsize=(10, 6), color = ['black', 'red', 'blue'])
+
+    plt.title("Picking Route Distance for {:,} Order lines / {} m distance threshold".format(lines_number, distance_threshold))
+    plt.ylabel('Walking Distance (m)')
+    plt.xlabel('Orders per Wave (Orders/Wave)')
+    plt.savefig("static/out/{}lines_{}m_3m.png".format(lines_number, distance_threshold))
+    plt.show()
+
+    return df_reswave
